@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  user
+}
+
+enum MediaType {
+  image
+  video
+}
+
+enum Visibility {
+  private
+  public
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(user)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  ownedMedia  MediaItem[]             @relation("MediaOwner")
+  sessions    Session[]
+  preferences UserMediaPreference[]
+  tagAssignments UserMediaTag[]
+
+  @@map("users")
+}
+
+model MediaItem {
+  id                Int        @id @default(autoincrement())
+  contentHash       String     @unique @map("content_hash")
+  mediaType         MediaType  @map("media_type")
+  originalFilename  String     @map("original_filename")
+  storagePath       String     @map("storage_path")
+  thumbnailPath     String     @map("thumbnail_path")
+  previewPath       String?    @map("preview_path")
+  mimeType          String     @map("mime_type")
+  width             Int
+  height            Int
+  durationSeconds   Decimal?   @map("duration_seconds")
+  capturedAt        DateTime?  @map("captured_at")
+  importedAt        DateTime   @default(now()) @map("imported_at")
+  fileSizeBytes     BigInt     @map("file_size_bytes")
+  ownerId           Int        @map("owner_id")
+  owner             User       @relation("MediaOwner", fields: [ownerId], references: [id])
+  visibility        Visibility @default(private)
+  deletedAt         DateTime?  @map("deleted_at")
+
+  preferences UserMediaPreference[]
+  tagAssignments UserMediaTag[]
+
+  @@index([ownerId])
+  @@index([visibility])
+  @@map("media_items")
+}
+
+model Tag {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  assignments UserMediaTag[]
+
+  @@map("tags")
+}
+
+model UserMediaPreference {
+  userId     Int      @map("user_id")
+  user       User      @relation(fields: [userId], references: [id])
+  mediaId    Int      @map("media_id")
+  media      MediaItem @relation(fields: [mediaId], references: [id])
+  isFavorite Boolean  @default(false) @map("is_favorite")
+  weight     Int      @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@id([userId, mediaId])
+  @@map("user_media_preferences")
+}
+
+model UserMediaTag {
+  userId  Int       @map("user_id")
+  user    User      @relation(fields: [userId], references: [id])
+  mediaId Int       @map("media_id")
+  media   MediaItem @relation(fields: [mediaId], references: [id])
+  tagId   Int       @map("tag_id")
+  tag     Tag       @relation(fields: [tagId], references: [id])
+
+  @@id([userId, mediaId, tagId])
+  @@map("user_media_tags")
+}
+
+model Session {
+  id        String   @id
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model LoginAttempt {
+  id           Int      @id @default(autoincrement())
+  ipAddress    String   @map("ip_address")
+  attemptedAt  DateTime @default(now()) @map("attempted_at")
+  success      Boolean
+
+  @@index([ipAddress, attemptedAt])
+  @@map("login_attempts")
+}
