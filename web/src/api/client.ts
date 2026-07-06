@@ -1,6 +1,10 @@
-import type { AdminUser, Role, SessionInfo } from "@media_viewer/shared";
+import type { AdminUser, MediaListItem, OrderMode, Role, SessionInfo } from "@media_viewer/shared";
 
 const BASE = "/api";
+
+export function mediaUrl(id: number, kind: "original" | "thumbnail" | "preview"): string {
+  return `${BASE}/media/${id}/${kind}`;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -32,4 +36,5 @@ export const api = {
   listUsers: () => request<AdminUser[]>("/admin/users"),
   createUser: (username: string, password: string, role: Role) =>
     request<AdminUser>("/admin/users", { method: "POST", body: JSON.stringify({ username, password, role }) }),
+  listMedia: (orderBy: OrderMode = "captured_at") => request<MediaListItem[]>(`/media?orderBy=${orderBy}`),
 };

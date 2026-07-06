@@ -1,12 +1,14 @@
 import fastifyCookie from "@fastify/cookie";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyRateLimit from "@fastify/rate-limit";
+import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyError } from "fastify";
 import { ZodError } from "zod";
 import { registerAdminRoutes } from "./admin/admin.routes.js";
 import { registerAuthGuards } from "./auth/guards.js";
 import { registerAuthRoutes } from "./auth/auth.routes.js";
 import { config } from "./config.js";
+import { registerMediaRoutes } from "./media/media.routes.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -14,10 +16,14 @@ export async function buildApp() {
   await app.register(fastifyHelmet);
   await app.register(fastifyCookie, { secret: config.cookieSecret });
   await app.register(fastifyRateLimit, { max: 100, timeWindow: "1 minute" });
+  // serve: false — no auto-registered routes; this only adds reply.sendFile(), so every file
+  // access still goes through our own owner-or-public authorization check in media.routes.ts.
+  await app.register(fastifyStatic, { root: config.mediaRoot, serve: false });
 
   registerAuthGuards(app);
   registerAuthRoutes(app);
   registerAdminRoutes(app);
+  registerMediaRoutes(app);
 
   app.get("/api/health", async () => ({ ok: true }));
 

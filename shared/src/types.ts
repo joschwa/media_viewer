@@ -8,3 +8,20 @@ export type AdminUser = {
   role: Role;
   createdAt: string;
 };
+
+export type MediaType = "image" | "video";
+export type Visibility = "private" | "public";
+export type OrderMode = "captured_at" | "filename" | "none";
+
+export type MediaListItem = {
+  id: number;
+  mediaType: MediaType;
+  originalFilename: string;
+  width: number;
+  height: number;
+  durationSeconds: number | null;
+  capturedAt: string | null;
+  importedAt: string;
+  ownerId: number;
+  visibility: Visibility;
+};

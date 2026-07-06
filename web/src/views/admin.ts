@@ -3,7 +3,7 @@ import { api, ApiError } from "../api/client.js";
 
 export async function renderAdmin(container: HTMLElement, onBack: () => void): Promise<void> {
   const wrap = document.createElement("div");
-  wrap.className = "admin";
+  wrap.className = "card admin";
   wrap.innerHTML = `
     <button data-action="back">&larr; Back</button>
     <h1>Admin</h1>

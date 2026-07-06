@@ -2,6 +2,7 @@ import { api, ApiError } from "../api/client.js";
 
 export function renderLogin(container: HTMLElement, onSuccess: () => void): void {
   const form = document.createElement("form");
+  form.className = "card";
   form.innerHTML = `
     <h1>Media Viewer</h1>
     <label>Username <input name="username" autocomplete="username" required /></label>

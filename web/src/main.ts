@@ -1,6 +1,6 @@
 import { api } from "./api/client.js";
-import { renderHome } from "./views/home.js";
 import { renderLogin } from "./views/login.js";
+import { renderSlideshow } from "./views/slideshow.js";
 
 async function render(): Promise<void> {
   const app = document.getElementById("app")!;
@@ -10,7 +10,7 @@ async function render(): Promise<void> {
   if (!session.loggedIn) {
     renderLogin(app, render);
   } else {
-    renderHome(app, session, render);
+    await renderSlideshow(app, session, render);
   }
 }
 
