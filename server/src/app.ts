@@ -1,0 +1,40 @@
+import fastifyCookie from "@fastify/cookie";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
+import Fastify, { type FastifyError } from "fastify";
+import { ZodError } from "zod";
+import { registerAdminRoutes } from "./admin/admin.routes.js";
+import { registerAuthGuards } from "./auth/guards.js";
+import { registerAuthRoutes } from "./auth/auth.routes.js";
+import { config } from "./config.js";
+
+export async function buildApp() {
+  const app = Fastify({ logger: true });
+
+  await app.register(fastifyHelmet);
+  await app.register(fastifyCookie, { secret: config.cookieSecret });
+  await app.register(fastifyRateLimit, { max: 100, timeWindow: "1 minute" });
+
+  registerAuthGuards(app);
+  registerAuthRoutes(app);
+  registerAdminRoutes(app);
+
+  app.get("/api/health", async () => ({ ok: true }));
+
+  app.setErrorHandler((err: FastifyError | ZodError, _request, reply) => {
+    if (err instanceof ZodError) {
+      reply.code(400).send({ error: "Invalid request", details: err.issues });
+      return;
+    }
+    // Fastify's own errors (bad JSON body, payload too large, etc.) already carry the right
+    // client-error status code — only fall back to a generic 500 for genuinely unexpected errors.
+    if (err.statusCode && err.statusCode < 500) {
+      reply.code(err.statusCode).send({ error: err.message });
+      return;
+    }
+    app.log.error(err);
+    reply.code(500).send({ error: "Internal server error" });
+  });
+
+  return app;
+}
