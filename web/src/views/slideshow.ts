@@ -1,18 +1,24 @@
 import type { MediaListItem, SessionInfo } from "@media_viewer/shared";
 import { api, mediaUrl } from "../api/client.js";
+import { openNavMenu } from "../components/navMenu.js";
 import { openSettingsModal } from "../components/settingsModal.js";
 import { loadSettings, SETTINGS_CHANGED_EVENT, type Settings } from "../lib/settingsStore.js";
+import { bumpWeight, clampWeight } from "../lib/weightSteps.js";
+import { weightedShuffle } from "../lib/weightedShuffle.js";
 import { renderAdmin } from "./admin.js";
 
 type LoggedInSession = Extract<SessionInfo, { loggedIn: true }>;
 
-function shuffle<T>(items: T[]): T[] {
-  const arr = [...items];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
+function applyFilters(items: MediaListItem[], settings: Settings): MediaListItem[] {
+  return items.filter((item) => {
+    if (item.isExcluded && !settings.showExcludedItems) return false;
+    if (settings.favoritesOnly && !item.isFavorite) return false;
+    if (item.weight < settings.minWeight) return false;
+    if (settings.filterTagIds.length > 0 && !item.tags.some((tag) => settings.filterTagIds.includes(tag.id))) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export async function renderSlideshow(
@@ -24,18 +30,31 @@ export async function renderSlideshow(
   wrap.className = "slideshow";
   wrap.innerHTML = `
     <div class="top-bar">
-      <span>${session.username} (${session.role})</span>
-      <span>
-        <button data-action="settings">Settings</button>
-        ${session.role === "admin" ? '<button data-action="admin">Admin</button>' : ""}
-        <button data-action="logout">Log out</button>
-      </span>
+      <button class="hamburger" data-action="menu" aria-label="Menu">&#9776;</button>
     </div>
     <div class="media-frame"></div>
     <div class="nav-buttons">
       <button data-action="prev">&larr; Back</button>
       <span class="counter"></span>
       <button data-action="next">Next &rarr;</button>
+    </div>
+    <div class="media-controls">
+      <div class="controls-row">
+        <button class="exclude-toggle" data-action="exclude" title="Exclude"></button>
+        <span class="weight-controls">
+          <button data-action="weight-down" title="Lower weight">&#128078;</button>
+          <input type="number" class="weight-value" min="-100" max="100" step="1" value="0" />
+          <button data-action="weight-up" title="Raise weight">&#128077;</button>
+        </span>
+        <button class="favorite-toggle" data-action="favorite" title="Favorite">&#9734;</button>
+        <button class="visibility-toggle" data-action="visibility"></button>
+        <form class="tag-add-form">
+          <input type="text" name="tagName" placeholder="Add tag" list="tag-suggestions" />
+          <datalist id="tag-suggestions"></datalist>
+          <button type="submit">Add</button>
+        </form>
+      </div>
+      <div class="tag-chips"></div>
     </div>
   `;
   container.appendChild(wrap);
@@ -45,8 +64,32 @@ export async function renderSlideshow(
   const navButtonsEl = wrap.querySelector<HTMLDivElement>(".nav-buttons")!;
   const prevBtn = wrap.querySelector<HTMLButtonElement>('[data-action="prev"]')!;
   const nextBtn = wrap.querySelector<HTMLButtonElement>('[data-action="next"]')!;
+  const menuBtn = wrap.querySelector<HTMLButtonElement>('[data-action="menu"]')!;
+  const favoriteBtn = wrap.querySelector<HTMLButtonElement>('[data-action="favorite"]')!;
+  const weightControlsEl = wrap.querySelector<HTMLSpanElement>(".weight-controls")!;
+  const weightValueEl = wrap.querySelector<HTMLInputElement>(".weight-value")!;
+  const weightDownBtn = wrap.querySelector<HTMLButtonElement>('[data-action="weight-down"]')!;
+  const weightUpBtn = wrap.querySelector<HTMLButtonElement>('[data-action="weight-up"]')!;
+  const excludeBtn = wrap.querySelector<HTMLButtonElement>('[data-action="exclude"]')!;
+  const visibilityBtn = wrap.querySelector<HTMLButtonElement>('[data-action="visibility"]')!;
+  const tagChipsEl = wrap.querySelector<HTMLDivElement>(".tag-chips")!;
+  const tagAddForm = wrap.querySelector<HTMLFormElement>(".tag-add-form")!;
+  const tagNameInput = wrap.querySelector<HTMLInputElement>('[name="tagName"]')!;
+  const tagSuggestionsEl = wrap.querySelector<HTMLDataListElement>("#tag-suggestions")!;
+  const mediaControlsEl = wrap.querySelector<HTMLDivElement>(".media-controls")!;
 
-  let settings = loadSettings();
+  function refreshTagSuggestions() {
+    void api
+      .listTags()
+      .then((tags) => {
+        tagSuggestionsEl.innerHTML = tags.map((tag) => `<option value="${tag.name}"></option>`).join("");
+      })
+      .catch(() => undefined);
+  }
+
+  refreshTagSuggestions();
+
+  let settings = loadSettings(session.username);
   let items: MediaListItem[] = [];
   let index = 0;
   let advanceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -95,6 +138,63 @@ export async function renderSlideshow(
     renderCurrent();
   }
 
+  /** Drops the current item out of the local view (e.g. just excluded, filter hides it) without a full reload. */
+  function removeCurrentFromView() {
+    items.splice(index, 1);
+    if (index >= items.length) index = Math.max(0, items.length - 1);
+    renderCurrent();
+  }
+
+  function renderControls() {
+    if (items.length === 0) {
+      mediaControlsEl.hidden = true;
+      return;
+    }
+    mediaControlsEl.hidden = false;
+    const item = items[index];
+
+    favoriteBtn.hidden = !settings.showFavoriteIndicator;
+    favoriteBtn.textContent = item.isFavorite ? "★" : "☆";
+    favoriteBtn.setAttribute("aria-pressed", String(item.isFavorite));
+
+    weightDownBtn.hidden = !settings.showWeightThumbs;
+    weightUpBtn.hidden = !settings.showWeightThumbs;
+    weightValueEl.hidden = !settings.showWeightNumber;
+    weightControlsEl.hidden = !settings.showWeightThumbs && !settings.showWeightNumber;
+    weightValueEl.value = String(item.weight);
+
+    excludeBtn.hidden = !settings.showExcludeButton;
+    excludeBtn.textContent = "🚫";
+    excludeBtn.title = item.isExcluded ? "Include" : "Exclude";
+    excludeBtn.setAttribute("aria-label", excludeBtn.title);
+    excludeBtn.setAttribute("aria-pressed", String(item.isExcluded));
+
+    const canEditVisibility = item.ownerId === session.userId || session.role === "admin";
+    visibilityBtn.hidden = !settings.showVisibilityToggle;
+    visibilityBtn.textContent = item.visibility === "public" ? "🌐 Public" : "🔒 Private";
+    visibilityBtn.disabled = !canEditVisibility;
+
+    tagChipsEl.hidden = !settings.showTagging;
+    tagAddForm.hidden = !settings.showTagging;
+    tagChipsEl.innerHTML = "";
+    for (const tag of item.tags) {
+      const chip = document.createElement("span");
+      chip.className = "tag-chip";
+      chip.textContent = tag.name;
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", async () => {
+        const nextIds = item.tags.filter((t) => t.id !== tag.id).map((t) => t.id);
+        const result = await api.updatePreferences(item.id, { tagIds: nextIds });
+        item.tags = result.tags;
+        renderControls();
+      });
+      chip.appendChild(removeBtn);
+      tagChipsEl.appendChild(chip);
+    }
+  }
+
   function renderCurrent() {
     teardownCurrentMedia();
     frameEl.innerHTML = "";
@@ -104,6 +204,7 @@ export async function renderSlideshow(
       counterEl.textContent = "";
       prevBtn.disabled = true;
       nextBtn.disabled = true;
+      renderControls();
       return;
     }
 
@@ -124,15 +225,18 @@ export async function renderSlideshow(
       video.muted = true; // browsers block unmuted autoplay; native controls let the viewer unmute
       frameEl.appendChild(video);
     }
+    counterEl.hidden = !settings.showMediaCounter;
     counterEl.textContent = `${index + 1} / ${items.length}`;
 
+    renderControls();
     armCurrentAdvance();
   }
 
   async function loadItems() {
     const apiOrderBy = settings.orderMode === "random" ? "none" : settings.orderMode;
     const fetched = await api.listMedia(apiOrderBy);
-    items = settings.orderMode === "random" ? shuffle(fetched) : fetched;
+    const filtered = applyFilters(fetched, settings);
+    items = settings.orderMode === "random" ? weightedShuffle(filtered, (item) => item.weight) : filtered;
     index = 0;
   }
 
@@ -140,12 +244,23 @@ export async function renderSlideshow(
     navButtonsEl.hidden = !settings.showNavButtons;
   }
 
+  function filtersChanged(a: Settings, b: Settings): boolean {
+    return (
+      a.favoritesOnly !== b.favoritesOnly ||
+      a.minWeight !== b.minWeight ||
+      a.showExcludedItems !== b.showExcludedItems ||
+      a.filterTagIds.length !== b.filterTagIds.length ||
+      a.filterTagIds.some((id) => !b.filterTagIds.includes(id))
+    );
+  }
+
   async function handleSettingsChanged(e: Event) {
     const newSettings = (e as CustomEvent<Settings>).detail;
     const orderChanged = newSettings.orderMode !== settings.orderMode;
+    const needsReload = orderChanged || filtersChanged(newSettings, settings);
     settings = newSettings;
     applyNavButtonsVisibility();
-    if (orderChanged) {
+    if (needsReload) {
       await loadItems();
     }
     renderCurrent();
@@ -157,33 +272,126 @@ export async function renderSlideshow(
     window.removeEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChanged);
   }
 
-  wrap.querySelector('[data-action="logout"]')?.addEventListener("click", async () => {
+  function doLogout() {
     teardown();
-    await api.logout();
-    rerender();
-  });
-  wrap.querySelector('[data-action="admin"]')?.addEventListener("click", () => {
+    void api.logout().then(() => rerender());
+  }
+
+  function doOpenAdmin() {
     teardown();
     container.innerHTML = "";
     void renderAdmin(container, rerender);
-  });
-  wrap.querySelector('[data-action="settings"]')?.addEventListener("click", () => {
+  }
+
+  function doOpenSettings() {
     teardownCurrentMedia();
     // Actually pause video playback too, not just the "ended" listener — otherwise a short
     // video can finish while the modal is open and never fire "ended" again once we resume.
     const openVideoEl = frameEl.querySelector("video");
     openVideoEl?.pause();
-    openSettingsModal(() => {
+    openSettingsModal(session.username, () => {
       // Resume for whatever's on screen — a no-op re-arm if a live setting change already
       // re-rendered while the modal was open, or a fresh arm if nothing changed.
       teardownCurrentMedia();
       openVideoEl?.play().catch(() => undefined);
       armCurrentAdvance();
     });
+  }
+
+  menuBtn.addEventListener("click", () => {
+    openNavMenu(
+      {
+        username: session.username,
+        role: session.role,
+        isAdmin: session.role === "admin",
+        onSettings: doOpenSettings,
+        onAdmin: doOpenAdmin,
+        onLogout: doLogout,
+      },
+      () => undefined,
+    );
   });
 
   prevBtn.addEventListener("click", prev);
   nextBtn.addEventListener("click", next);
+
+  favoriteBtn.addEventListener("click", async () => {
+    if (items.length === 0) return;
+    const item = items[index];
+    const result = await api.updatePreferences(item.id, { isFavorite: !item.isFavorite });
+    item.isFavorite = result.isFavorite;
+    item.weight = result.weight;
+    item.isExcluded = result.isExcluded;
+    item.tags = result.tags;
+    renderControls();
+  });
+
+  async function bumpItemWeight(direction: 1 | -1) {
+    if (items.length === 0) return;
+    const item = items[index];
+    const result = await api.updatePreferences(item.id, { weight: bumpWeight(item.weight, direction) });
+    item.isFavorite = result.isFavorite;
+    item.weight = result.weight;
+    item.isExcluded = result.isExcluded;
+    item.tags = result.tags;
+    renderControls();
+  }
+  weightDownBtn.addEventListener("click", () => bumpItemWeight(-1));
+  weightUpBtn.addEventListener("click", () => bumpItemWeight(1));
+
+  weightValueEl.addEventListener("change", async () => {
+    if (items.length === 0) return;
+    const item = items[index];
+    const weight = clampWeight(Number(weightValueEl.value));
+    const result = await api.updatePreferences(item.id, { weight });
+    item.isFavorite = result.isFavorite;
+    item.weight = result.weight;
+    item.isExcluded = result.isExcluded;
+    item.tags = result.tags;
+    renderControls();
+  });
+
+  excludeBtn.addEventListener("click", async () => {
+    if (items.length === 0) return;
+    const item = items[index];
+    const result = await api.updatePreferences(item.id, { isExcluded: !item.isExcluded });
+    item.isFavorite = result.isFavorite;
+    item.weight = result.weight;
+    item.isExcluded = result.isExcluded;
+    item.tags = result.tags;
+    if (item.isExcluded && !settings.showExcludedItems) {
+      removeCurrentFromView();
+    } else {
+      renderControls();
+    }
+  });
+
+  visibilityBtn.addEventListener("click", async () => {
+    if (items.length === 0) return;
+    const item = items[index];
+    const canEdit = item.ownerId === session.userId || session.role === "admin";
+    if (!canEdit) return;
+    const nextVisibility = item.visibility === "public" ? "private" : "public";
+    const result = await api.updateVisibility(item.id, nextVisibility);
+    item.visibility = result.visibility;
+    renderControls();
+  });
+
+  tagAddForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (items.length === 0) return;
+    const name = tagNameInput.value.trim();
+    if (!name) return;
+    const item = items[index];
+    const tag = await api.createTag(name);
+    tagNameInput.value = "";
+    if (item.tags.some((t) => t.id === tag.id)) return;
+    const nextIds = [...item.tags.map((t) => t.id), tag.id];
+    const result = await api.updatePreferences(item.id, { tagIds: nextIds });
+    item.tags = result.tags;
+    renderControls();
+    refreshTagSuggestions();
+  });
 
   applyNavButtonsVisibility();
   await loadItems();

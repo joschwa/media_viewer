@@ -6,6 +6,17 @@ export type Settings = {
   imageDurationSeconds: number;
   autoAdvanceVideos: boolean;
   showNavButtons: boolean;
+  favoritesOnly: boolean;
+  minWeight: number;
+  filterTagIds: number[];
+  showExcludedItems: boolean;
+  showFavoriteIndicator: boolean;
+  showWeightThumbs: boolean;
+  showWeightNumber: boolean;
+  showTagging: boolean;
+  showVisibilityToggle: boolean;
+  showExcludeButton: boolean;
+  showMediaCounter: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -14,14 +25,31 @@ export const DEFAULT_SETTINGS: Settings = {
   imageDurationSeconds: 10,
   autoAdvanceVideos: true,
   showNavButtons: true,
+  favoritesOnly: false,
+  minWeight: -100,
+  filterTagIds: [],
+  showExcludedItems: false,
+  showFavoriteIndicator: false,
+  showWeightThumbs: true,
+  showWeightNumber: false,
+  showTagging: true,
+  showVisibilityToggle: false,
+  showExcludeButton: false,
+  showMediaCounter: false,
 };
 
-const STORAGE_KEY = "media_viewer_settings";
+const STORAGE_KEY_PREFIX = "media_viewer_settings";
 export const SETTINGS_CHANGED_EVENT = "settings:changed";
 
-export function loadSettings(): Settings {
+// Settings are stored per-username so switching accounts on the same browser doesn't leak
+// one user's display/filter preferences into another user's slideshow.
+function storageKey(username: string): string {
+  return `${STORAGE_KEY_PREFIX}:${username}`;
+}
+
+export function loadSettings(username: string): Settings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(username));
     if (!raw) return { ...DEFAULT_SETTINGS };
     // Spread over the defaults so a settings shape from an older version of the app
     // (missing fields, since we never version this) still yields a fully-populated Settings.
@@ -31,7 +59,7 @@ export function loadSettings(): Settings {
   }
 }
 
-export function saveSettings(settings: Settings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+export function saveSettings(username: string, settings: Settings): void {
+  localStorage.setItem(storageKey(username), JSON.stringify(settings));
   window.dispatchEvent(new CustomEvent<Settings>(SETTINGS_CHANGED_EVENT, { detail: settings }));
 }

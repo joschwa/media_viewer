@@ -13,6 +13,11 @@ export type MediaType = "image" | "video";
 export type Visibility = "private" | "public";
 export type OrderMode = "captured_at" | "filename" | "none";
 
+export type Tag = {
+  id: number;
+  name: string;
+};
+
 export type MediaListItem = {
   id: number;
   mediaType: MediaType;
@@ -24,4 +29,15 @@ export type MediaListItem = {
   importedAt: string;
   ownerId: number;
   visibility: Visibility;
+  isFavorite: boolean;
+  weight: number;
+  isExcluded: boolean;
+  tags: Tag[];
+};
+
+export type MediaPreferences = {
+  isFavorite: boolean;
+  weight: number;
+  isExcluded: boolean;
+  tags: Tag[];
 };

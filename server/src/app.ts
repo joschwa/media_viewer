@@ -9,6 +9,7 @@ import { registerAuthGuards } from "./auth/guards.js";
 import { registerAuthRoutes } from "./auth/auth.routes.js";
 import { config } from "./config.js";
 import { registerMediaRoutes } from "./media/media.routes.js";
+import { registerTagRoutes } from "./tags/tags.routes.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -24,6 +25,7 @@ export async function buildApp() {
   registerAuthRoutes(app);
   registerAdminRoutes(app);
   registerMediaRoutes(app);
+  registerTagRoutes(app);
 
   app.get("/api/health", async () => ({ ok: true }));
 

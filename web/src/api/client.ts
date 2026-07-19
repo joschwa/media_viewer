@@ -1,4 +1,13 @@
-import type { AdminUser, MediaListItem, OrderMode, Role, SessionInfo } from "@media_viewer/shared";
+import type {
+  AdminUser,
+  MediaListItem,
+  MediaPreferences,
+  OrderMode,
+  Role,
+  SessionInfo,
+  Tag,
+  Visibility,
+} from "@media_viewer/shared";
 
 const BASE = "/api";
 
@@ -37,4 +46,15 @@ export const api = {
   createUser: (username: string, password: string, role: Role) =>
     request<AdminUser>("/admin/users", { method: "POST", body: JSON.stringify({ username, password, role }) }),
   listMedia: (orderBy: OrderMode = "captured_at") => request<MediaListItem[]>(`/media?orderBy=${orderBy}`),
+  updateVisibility: (id: number, visibility: Visibility) =>
+    request<{ id: number; visibility: Visibility }>(`/media/${id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility }),
+    }),
+  updatePreferences: (
+    id: number,
+    body: { isFavorite?: boolean; weight?: number; isExcluded?: boolean; tagIds?: number[] },
+  ) => request<MediaPreferences>(`/media/${id}/preferences`, { method: "PATCH", body: JSON.stringify(body) }),
+  listTags: () => request<Tag[]>("/tags"),
+  createTag: (name: string) => request<Tag>("/tags", { method: "POST", body: JSON.stringify({ name }) }),
 };

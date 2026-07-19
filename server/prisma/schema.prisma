@@ -82,6 +82,7 @@ model UserMediaPreference {
   media      MediaItem @relation(fields: [mediaId], references: [id])
   isFavorite Boolean  @default(false) @map("is_favorite")
   weight     Int      @default(0)
+  isExcluded Boolean  @default(false) @map("is_excluded")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@id([userId, mediaId])
