@@ -1,8 +1,10 @@
+import type { Role } from "@media_viewer/shared";
 import { api } from "../api/client.js";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from "../lib/settingsStore.js";
 
-export function openSettingsModal(username: string, onClose: () => void): void {
+export function openSettingsModal(username: string, role: Role, onClose: () => void): void {
   let settings = loadSettings(username);
+  const isAdmin = role === "admin";
 
   const backdrop = document.createElement("div");
   backdrop.className = "settings-backdrop";
@@ -40,6 +42,7 @@ export function openSettingsModal(username: string, onClose: () => void): void {
         <label class="checkbox-row"><input type="checkbox" name="showVisibilityToggle" /> Visibility toggle</label>
         <label class="checkbox-row"><input type="checkbox" name="showExcludeButton" /> Exclude button</label>
         <label class="checkbox-row"><input type="checkbox" name="showMediaCounter" /> Media count (n / total)</label>
+        ${isAdmin ? '<label class="checkbox-row"><input type="checkbox" name="showDeleteButton" /> Delete button</label>' : ""}
       </fieldset>
 
       <fieldset>
@@ -70,6 +73,8 @@ export function openSettingsModal(username: string, onClose: () => void): void {
     showVisibilityToggle: backdrop.querySelector<HTMLInputElement>('[name="showVisibilityToggle"]')!,
     showExcludeButton: backdrop.querySelector<HTMLInputElement>('[name="showExcludeButton"]')!,
     showMediaCounter: backdrop.querySelector<HTMLInputElement>('[name="showMediaCounter"]')!,
+    // Only present in the DOM for admins — the delete feature doesn't exist for anyone else.
+    showDeleteButton: backdrop.querySelector<HTMLInputElement>('[name="showDeleteButton"]'),
     favoritesOnly: backdrop.querySelector<HTMLInputElement>('[name="favoritesOnly"]')!,
     minWeight: backdrop.querySelector<HTMLInputElement>('[name="minWeight"]')!,
     showExcludedItems: backdrop.querySelector<HTMLInputElement>('[name="showExcludedItems"]')!,
@@ -91,6 +96,7 @@ export function openSettingsModal(username: string, onClose: () => void): void {
     fieldEls.showVisibilityToggle.checked = s.showVisibilityToggle;
     fieldEls.showExcludeButton.checked = s.showExcludeButton;
     fieldEls.showMediaCounter.checked = s.showMediaCounter;
+    if (fieldEls.showDeleteButton) fieldEls.showDeleteButton.checked = s.showDeleteButton;
     fieldEls.favoritesOnly.checked = s.favoritesOnly;
     fieldEls.minWeight.value = String(s.minWeight);
     fieldEls.showExcludedItems.checked = s.showExcludedItems;
@@ -174,6 +180,9 @@ export function openSettingsModal(username: string, onClose: () => void): void {
   );
   fieldEls.showMediaCounter.addEventListener("change", () =>
     apply({ showMediaCounter: fieldEls.showMediaCounter.checked }),
+  );
+  fieldEls.showDeleteButton?.addEventListener("change", () =>
+    apply({ showDeleteButton: fieldEls.showDeleteButton!.checked }),
   );
   fieldEls.favoritesOnly.addEventListener("change", () => apply({ favoritesOnly: fieldEls.favoritesOnly.checked }));
   fieldEls.minWeight.addEventListener("change", () => {

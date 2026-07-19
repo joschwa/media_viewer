@@ -4,6 +4,9 @@ export type NavMenuOptions = {
   isAdmin: boolean;
   onSettings: () => void;
   onAdmin: () => void;
+  onUpload: () => void;
+  onChangePassword: () => void;
+  onTriggerScan: () => void;
   onLogout: () => void;
 };
 
@@ -16,8 +19,11 @@ export function openNavMenu(options: NavMenuOptions, onClose: () => void): void 
         <span>${options.username} (${options.role})</span>
         <button data-action="close" class="nav-menu-close" aria-label="Close menu">&times;</button>
       </div>
+      <button data-action="upload">Upload</button>
+      <button data-action="change-password">Change password</button>
       <button data-action="settings">Settings</button>
       ${options.isAdmin ? '<button data-action="admin">Admin</button>' : ""}
+      ${options.isAdmin ? '<button data-action="scan">Trigger scan</button>' : ""}
       <button data-action="logout">Log out</button>
     </div>
   `;
@@ -35,6 +41,14 @@ export function openNavMenu(options: NavMenuOptions, onClose: () => void): void 
     if (e.target === backdrop) close();
   });
   backdrop.querySelector('[data-action="close"]')?.addEventListener("click", close);
+  backdrop.querySelector('[data-action="upload"]')?.addEventListener("click", () => {
+    close();
+    options.onUpload();
+  });
+  backdrop.querySelector('[data-action="change-password"]')?.addEventListener("click", () => {
+    close();
+    options.onChangePassword();
+  });
   backdrop.querySelector('[data-action="settings"]')?.addEventListener("click", () => {
     close();
     options.onSettings();
@@ -42,6 +56,10 @@ export function openNavMenu(options: NavMenuOptions, onClose: () => void): void 
   backdrop.querySelector('[data-action="admin"]')?.addEventListener("click", () => {
     close();
     options.onAdmin();
+  });
+  backdrop.querySelector('[data-action="scan"]')?.addEventListener("click", () => {
+    close();
+    options.onTriggerScan();
   });
   backdrop.querySelector('[data-action="logout"]')?.addEventListener("click", () => {
     close();

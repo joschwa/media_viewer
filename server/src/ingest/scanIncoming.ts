@@ -14,7 +14,23 @@ export type ScanResult = {
 
 const MAIN_USERNAME = "main";
 
+let scanInProgress = false;
+
+/** Guards against two scans racing on the same files in `incoming/` (e.g. a double-clicked admin trigger). */
+export function isScanInProgress(): boolean {
+  return scanInProgress;
+}
+
 export async function scanIncoming(): Promise<ScanResult> {
+  scanInProgress = true;
+  try {
+    return await runScan();
+  } finally {
+    scanInProgress = false;
+  }
+}
+
+async function runScan(): Promise<ScanResult> {
   await ensureBaseDirs();
 
   const mainUser = await prisma.user.findUnique({ where: { username: MAIN_USERNAME } });

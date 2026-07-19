@@ -75,14 +75,44 @@ button:disabled {
   color: #b00020;
 }
 
-.admin .user-list {
-  list-style: none;
-  padding: 0;
+.success {
+  color: #1a7a3c;
 }
 
-.admin .user-list li {
-  padding: 0.25rem 0;
+.admin {
+  max-width: 720px;
+}
+
+.admin .user-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin .user-table th,
+.admin .user-table td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
   border-bottom: 1px solid #eee;
+}
+
+.admin .user-table td.actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.admin .user-table td.actions button {
+  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+}
+
+button.danger {
+  background: #b00020;
+}
+
+button.danger:hover {
+  background: #d0002a;
 }
 
 .slideshow {
@@ -299,6 +329,59 @@ button:disabled {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;
   min-height: 1.8rem;
+}
+
+.slideshow .delete-toggle {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  border-radius: 8px;
+}
+
+.slideshow .delete-toggle:hover {
+  background: rgba(255, 90, 90, 0.25);
+}
+
+.slideshow .delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.slideshow .delete-confirm button {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+  min-height: 2rem;
+}
+
+.scan-summary,
+.upload-results {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.scan-summary li,
+.upload-results li {
+  padding: 0.2rem 0;
+}
+
+.scan-errors {
+  margin: 0.5rem 0;
+  padding-left: 1.2rem;
+  color: #b00020;
+}
+
+.upload-form {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .slideshow .nav-buttons {

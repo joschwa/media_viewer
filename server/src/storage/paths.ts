@@ -5,6 +5,9 @@ import { config } from "../config.js";
 export const incomingDir = () => path.join(config.mediaRoot, "incoming");
 export const duplicatesDir = () => path.join(incomingDir(), "duplicates");
 export const quarantineDir = () => path.join(config.mediaRoot, "quarantine");
+// Uploads land here (not in incoming/) so an in-flight web upload can never be picked up
+// mid-write by a concurrent admin-triggered scan of incoming/.
+export const uploadsTmpDir = () => path.join(config.mediaRoot, "uploads-tmp");
 
 type StorageKind = "originals" | "thumbnails" | "previews";
 
@@ -24,6 +27,7 @@ export async function ensureBaseDirs(): Promise<void> {
   await mkdir(incomingDir(), { recursive: true });
   await mkdir(duplicatesDir(), { recursive: true });
   await mkdir(quarantineDir(), { recursive: true });
+  await mkdir(uploadsTmpDir(), { recursive: true });
   await mkdir(path.join(config.mediaRoot, "storage", "originals"), { recursive: true });
   await mkdir(path.join(config.mediaRoot, "storage", "thumbnails"), { recursive: true });
   await mkdir(path.join(config.mediaRoot, "storage", "previews"), { recursive: true });

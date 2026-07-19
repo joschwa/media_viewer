@@ -1,5 +1,6 @@
 import fastifyCookie from "@fastify/cookie";
 import fastifyHelmet from "@fastify/helmet";
+import fastifyMultipart from "@fastify/multipart";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyError } from "fastify";
@@ -17,6 +18,10 @@ export async function buildApp() {
   await app.register(fastifyHelmet);
   await app.register(fastifyCookie, { secret: config.cookieSecret });
   await app.register(fastifyRateLimit, { max: 100, timeWindow: "1 minute" });
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: 1_000_000_000, files: 20 },
+    throwFileSizeLimit: true,
+  });
   // serve: false — no auto-registered routes; this only adds reply.sendFile(), so every file
   // access still goes through our own owner-or-public authorization check in media.routes.ts.
   await app.register(fastifyStatic, { root: config.mediaRoot, serve: false });

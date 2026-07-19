@@ -17,6 +17,7 @@ export type Settings = {
   showVisibilityToggle: boolean;
   showExcludeButton: boolean;
   showMediaCounter: boolean;
+  showDeleteButton: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -36,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showVisibilityToggle: false,
   showExcludeButton: false,
   showMediaCounter: false,
+  showDeleteButton: false,
 };
 
 const STORAGE_KEY_PREFIX = "media_viewer_settings";

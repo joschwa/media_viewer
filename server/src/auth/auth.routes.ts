@@ -12,6 +12,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
 // Compared against when no such user exists, so a login attempt for an unknown username takes
 // roughly the same time as one for a known username with a wrong password (no enumeration timing leak).
 const DUMMY_HASH = bcrypt.hashSync("no-such-user-placeholder", 12);
@@ -39,6 +44,11 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         reply.code(401).send({ error: "Invalid username or password" });
         return;
       }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date(), loginCount: { increment: 1 } },
+      });
 
       const { token, expiresAt } = await createSession(user.id);
       reply.setCookie(SESSION_COOKIE_NAME, token, {
@@ -73,4 +83,33 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     }
     reply.send({ loggedIn: true, userId: user.id, username: user.username, role: user.role });
   });
+
+  app.patch(
+    "/api/session/password",
+    { preHandler: app.requireAuth, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const body = changePasswordSchema.parse(request.body);
+      const currentUser = request.currentUser!;
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: currentUser.id } });
+      const currentPasswordMatches = await bcrypt.compare(body.currentPassword, user.passwordHash);
+      if (!currentPasswordMatches) {
+        reply.code(401).send({ error: "Current password is incorrect" });
+        return;
+      }
+
+      const passwordHash = await bcrypt.hash(body.newPassword, 12);
+      await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+      // Invalidate every other active session so a compromised password can't keep being used elsewhere.
+      const raw = request.cookies[SESSION_COOKIE_NAME];
+      const unsigned = raw ? request.unsignCookie(raw) : null;
+      const currentToken = unsigned?.valid ? unsigned.value : null;
+      await prisma.session.deleteMany({
+        where: { userId: user.id, ...(currentToken ? { id: { not: currentToken } } : {}) },
+      });
+
+      reply.send({ ok: true });
+    },
+  );
 }

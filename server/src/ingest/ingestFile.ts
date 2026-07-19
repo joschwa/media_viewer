@@ -42,7 +42,11 @@ async function quarantine(currentPath: string, reason: string): Promise<void> {
   }
 }
 
-export async function ingestFile(sourcePath: string, ownerId: number): Promise<IngestOutcome> {
+export async function ingestFile(
+  sourcePath: string,
+  ownerId: number,
+  originalFilenameOverride?: string,
+): Promise<IngestOutcome> {
   let currentPath = sourcePath;
   try {
     const sniffed = await sniffMedia(sourcePath);
@@ -96,7 +100,7 @@ export async function ingestFile(sourcePath: string, ownerId: number): Promise<I
       data: {
         contentHash,
         mediaType: sniffed.mediaType,
-        originalFilename: path.basename(sourcePath),
+        originalFilename: originalFilenameOverride ?? path.basename(sourcePath),
         storagePath: originalRelPath,
         thumbnailPath: thumbnailRelPath,
         previewPath: previewGenerated ? previewRelPath : null,

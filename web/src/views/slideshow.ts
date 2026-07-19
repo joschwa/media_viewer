@@ -1,7 +1,10 @@
 import type { MediaListItem, SessionInfo } from "@media_viewer/shared";
 import { api, mediaUrl } from "../api/client.js";
+import { openChangePasswordModal } from "../components/changePasswordModal.js";
 import { openNavMenu } from "../components/navMenu.js";
+import { openScanReportModal } from "../components/scanReportModal.js";
 import { openSettingsModal } from "../components/settingsModal.js";
+import { openUploadModal } from "../components/uploadModal.js";
 import { loadSettings, SETTINGS_CHANGED_EVENT, type Settings } from "../lib/settingsStore.js";
 import { bumpWeight, clampWeight } from "../lib/weightSteps.js";
 import { weightedShuffle } from "../lib/weightedShuffle.js";
@@ -53,6 +56,12 @@ export async function renderSlideshow(
           <datalist id="tag-suggestions"></datalist>
           <button type="submit">Add</button>
         </form>
+        <button class="delete-toggle" data-action="delete" title="Delete">&#128465;</button>
+        <span class="delete-confirm" hidden>
+          Delete this item?
+          <button type="button" class="danger" data-action="delete-confirm">Delete</button>
+          <button type="button" data-action="delete-cancel">Cancel</button>
+        </span>
       </div>
       <div class="tag-chips"></div>
     </div>
@@ -77,6 +86,8 @@ export async function renderSlideshow(
   const tagNameInput = wrap.querySelector<HTMLInputElement>('[name="tagName"]')!;
   const tagSuggestionsEl = wrap.querySelector<HTMLDataListElement>("#tag-suggestions")!;
   const mediaControlsEl = wrap.querySelector<HTMLDivElement>(".media-controls")!;
+  const deleteToggleBtn = wrap.querySelector<HTMLButtonElement>('[data-action="delete"]')!;
+  const deleteConfirmEl = wrap.querySelector<HTMLSpanElement>(".delete-confirm")!;
 
   function refreshTagSuggestions() {
     void api
@@ -176,6 +187,11 @@ export async function renderSlideshow(
 
     tagChipsEl.hidden = !settings.showTagging;
     tagAddForm.hidden = !settings.showTagging;
+
+    const canDelete = session.role === "admin" && settings.showDeleteButton;
+    deleteToggleBtn.hidden = !canDelete;
+    deleteConfirmEl.hidden = true;
+
     tagChipsEl.innerHTML = "";
     for (const tag of item.tags) {
       const chip = document.createElement("span");
@@ -280,22 +296,39 @@ export async function renderSlideshow(
   function doOpenAdmin() {
     teardown();
     container.innerHTML = "";
-    void renderAdmin(container, rerender);
+    void renderAdmin(container, session, rerender);
   }
 
-  function doOpenSettings() {
+  /** Pauses whatever's playing before opening a modal, and resumes (or re-arms) it on close. */
+  function withPausedMedia(open: (onClose: () => void) => void) {
     teardownCurrentMedia();
     // Actually pause video playback too, not just the "ended" listener — otherwise a short
     // video can finish while the modal is open and never fire "ended" again once we resume.
     const openVideoEl = frameEl.querySelector("video");
     openVideoEl?.pause();
-    openSettingsModal(session.username, () => {
+    open(() => {
       // Resume for whatever's on screen — a no-op re-arm if a live setting change already
       // re-rendered while the modal was open, or a fresh arm if nothing changed.
       teardownCurrentMedia();
       openVideoEl?.play().catch(() => undefined);
       armCurrentAdvance();
     });
+  }
+
+  function doOpenSettings() {
+    withPausedMedia((onClose) => openSettingsModal(session.username, session.role, onClose));
+  }
+
+  function doOpenUpload() {
+    withPausedMedia((onClose) => openUploadModal(onClose));
+  }
+
+  function doOpenChangePassword() {
+    withPausedMedia((onClose) => openChangePasswordModal(onClose));
+  }
+
+  function doTriggerScan() {
+    withPausedMedia((onClose) => openScanReportModal(onClose));
   }
 
   menuBtn.addEventListener("click", () => {
@@ -306,6 +339,9 @@ export async function renderSlideshow(
         isAdmin: session.role === "admin",
         onSettings: doOpenSettings,
         onAdmin: doOpenAdmin,
+        onUpload: doOpenUpload,
+        onChangePassword: doOpenChangePassword,
+        onTriggerScan: doTriggerScan,
         onLogout: doLogout,
       },
       () => undefined,
@@ -391,6 +427,22 @@ export async function renderSlideshow(
     item.tags = result.tags;
     renderControls();
     refreshTagSuggestions();
+  });
+
+  deleteToggleBtn.addEventListener("click", () => {
+    deleteToggleBtn.hidden = true;
+    deleteConfirmEl.hidden = false;
+  });
+
+  wrap.querySelector('[data-action="delete-cancel"]')?.addEventListener("click", () => {
+    renderControls();
+  });
+
+  wrap.querySelector('[data-action="delete-confirm"]')?.addEventListener("click", async () => {
+    if (items.length === 0) return;
+    const item = items[index];
+    await api.deleteMedia(item.id);
+    removeCurrentFromView();
   });
 
   applyNavButtonsVisibility();

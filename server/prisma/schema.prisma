@@ -23,11 +23,13 @@ enum Visibility {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  passwordHash String   @map("password_hash")
-  role         Role     @default(user)
-  createdAt    DateTime @default(now()) @map("created_at")
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(user)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  loginCount   Int       @default(0) @map("login_count")
+  lastLoginAt  DateTime? @map("last_login_at")
 
   ownedMedia  MediaItem[]             @relation("MediaOwner")
   sessions    Session[]
@@ -55,7 +57,6 @@ model MediaItem {
   ownerId           Int        @map("owner_id")
   owner             User       @relation("MediaOwner", fields: [ownerId], references: [id])
   visibility        Visibility @default(private)
-  deletedAt         DateTime?  @map("deleted_at")
 
   preferences UserMediaPreference[]
   tagAssignments UserMediaTag[]
@@ -77,9 +78,9 @@ model Tag {
 
 model UserMediaPreference {
   userId     Int      @map("user_id")
-  user       User      @relation(fields: [userId], references: [id])
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   mediaId    Int      @map("media_id")
-  media      MediaItem @relation(fields: [mediaId], references: [id])
+  media      MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   isFavorite Boolean  @default(false) @map("is_favorite")
   weight     Int      @default(0)
   isExcluded Boolean  @default(false) @map("is_excluded")
@@ -91,9 +92,9 @@ model UserMediaPreference {
 
 model UserMediaTag {
   userId  Int       @map("user_id")
-  user    User      @relation(fields: [userId], references: [id])
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   mediaId Int       @map("media_id")
-  media   MediaItem @relation(fields: [mediaId], references: [id])
+  media   MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   tagId   Int       @map("tag_id")
   tag     Tag       @relation(fields: [tagId], references: [id])
 
@@ -104,7 +105,7 @@ model UserMediaTag {
 model Session {
   id        String   @id
   userId    Int      @map("user_id")
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @map("created_at")
   expiresAt DateTime @map("expires_at")
 

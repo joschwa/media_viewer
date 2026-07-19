@@ -7,6 +7,8 @@ export type AdminUser = {
   username: string;
   role: Role;
   createdAt: string;
+  loginCount: number;
+  lastLoginAt: string | null;
 };
 
 export type MediaType = "image" | "video";
@@ -40,4 +42,22 @@ export type MediaPreferences = {
   weight: number;
   isExcluded: boolean;
   tags: Tag[];
+};
+
+export type ScanResult = {
+  scanned: number;
+  imported: number;
+  duplicates: number;
+  quarantined: number;
+  errors: { file: string; reason: string }[];
+};
+
+export type UploadFileResult = {
+  filename: string;
+  status: "imported" | "duplicate" | "quarantined";
+  reason?: string;
+};
+
+export type UploadResponse = {
+  results: UploadFileResult[];
 };
