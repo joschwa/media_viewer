@@ -7,6 +7,7 @@
     "seed-admin": "tsx src/cli/seed-admin.ts",
     "scan": "tsx src/cli/scan.ts",
     "dev": "tsx watch src/server.ts",
+    "build": "tsc",
     "test": "vitest run",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate"

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import fastifyCookie from "@fastify/cookie";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyMultipart from "@fastify/multipart";
@@ -12,8 +14,17 @@ import { config } from "./config.js";
 import { registerMediaRoutes } from "./media/media.routes.js";
 import { registerTagRoutes } from "./tags/tags.routes.js";
 
+// Works whether this runs via tsx from server/src/ (dev) or compiled in server/dist/ (prod) —
+// both are exactly two levels below the repo root, where web/dist lives as a sibling of server/.
+const webDistPath = path.resolve(import.meta.dirname, "../../web/dist");
+
 export async function buildApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    ...(config.httpsEnabled
+      ? { https: { key: readFileSync(config.tlsKeyPath!), cert: readFileSync(config.tlsCertPath!) } }
+      : {}),
+  });
 
   await app.register(fastifyHelmet);
   await app.register(fastifyCookie, { secret: config.cookieSecret });
@@ -25,6 +36,12 @@ export async function buildApp() {
   // serve: false — no auto-registered routes; this only adds reply.sendFile(), so every file
   // access still goes through our own owner-or-public authorization check in media.routes.ts.
   await app.register(fastifyStatic, { root: config.mediaRoot, serve: false });
+
+  // Serves the built frontend (`npm run build --workspace web`) so the Pi can run this as the
+  // only process — a no-op until web/dist exists (e.g. a fresh checkout before the first build).
+  if (existsSync(webDistPath)) {
+    await app.register(fastifyStatic, { root: webDistPath, prefix: "/", decorateReply: false });
+  }
 
   registerAuthGuards(app);
   registerAuthRoutes(app);

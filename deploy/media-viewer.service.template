@@ -1,0 +1,15 @@
+[Unit]
+Description=Media Viewer
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+WorkingDirectory=__APP_DIR__/server
+EnvironmentFile=/etc/media_viewer/env
+ExecStart=/usr/bin/node __APP_DIR__/server/dist/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
