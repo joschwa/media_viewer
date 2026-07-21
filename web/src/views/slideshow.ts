@@ -5,6 +5,7 @@ import { openNavMenu } from "../components/navMenu.js";
 import { openScanReportModal } from "../components/scanReportModal.js";
 import { openSettingsModal } from "../components/settingsModal.js";
 import { openUploadModal } from "../components/uploadModal.js";
+import { createMediaPreloader } from "../lib/mediaPreloader.js";
 import { loadSettings, SETTINGS_CHANGED_EVENT, type Settings } from "../lib/settingsStore.js";
 import { bumpWeight, clampWeight } from "../lib/weightSteps.js";
 import { weightedShuffle } from "../lib/weightedShuffle.js";
@@ -106,6 +107,59 @@ export async function renderSlideshow(
   let advanceTimer: ReturnType<typeof setTimeout> | null = null;
   let advancingVideoEl: HTMLVideoElement | null = null;
   let advancingVideoHandler: (() => void) | null = null;
+
+  // Background prefetch: once the current item is fully loaded, start fetching upcoming items
+  // one at a time so navigating forward feels instant. Purely an optimization layer — anything
+  // not yet cached (or fetched too slowly to keep up) just falls back to loading on demand.
+  const PRELOAD_AHEAD = 3;
+  const PRELOAD_BEHIND = 2;
+  const preloader = createMediaPreloader();
+  let preloadPipelineRunning = false;
+
+  async function runPreloadPipeline() {
+    if (preloadPipelineRunning || items.length <= 1) return;
+    preloadPipelineRunning = true;
+    try {
+      for (let offset = 1; offset <= PRELOAD_AHEAD; offset++) {
+        const targetIndex = (index + offset) % items.length;
+        if (targetIndex === index) break; // wrapped all the way around a tiny library
+        const item = items[targetIndex];
+        if (preloader.has(item.id)) continue;
+        try {
+          await preloader.preload(item);
+        } catch {
+          // Best-effort — a failed prefetch just falls back to normal loading when it becomes current.
+        }
+      }
+    } finally {
+      preloadPipelineRunning = false;
+    }
+  }
+
+  function trimPreloadWindow() {
+    if (items.length === 0) return;
+    const keepIds = new Set<number>();
+    for (let offset = -PRELOAD_BEHIND; offset <= PRELOAD_AHEAD; offset++) {
+      const i = (((index + offset) % items.length) + items.length) % items.length;
+      keepIds.add(items[i].id);
+    }
+    for (const id of preloader.keys()) {
+      if (!keepIds.has(id)) preloader.evict(id);
+    }
+  }
+
+  /** Kicks off the preload pipeline once `mediaEl` is fully ready — immediately if it already is
+   * (e.g. reused from the preload cache), otherwise on the same "ready" signal used elsewhere. */
+  function armReadyToPreloadNext(mediaEl: HTMLImageElement | HTMLVideoElement) {
+    const trigger = () => void runPreloadPipeline();
+    if (mediaEl instanceof HTMLVideoElement) {
+      mediaEl.addEventListener("canplaythrough", trigger, { once: true });
+      if (mediaEl.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) trigger();
+    } else {
+      mediaEl.addEventListener("load", trigger, { once: true });
+      if (mediaEl.complete) trigger();
+    }
+  }
 
   function teardownCurrentMedia() {
     if (advanceTimer !== null) {
@@ -228,11 +282,22 @@ export async function renderSlideshow(
     nextBtn.disabled = false;
 
     const item = items[index];
+    const cached = preloader.get(item.id);
+
     if (item.mediaType === "image") {
       const img = document.createElement("img");
-      img.src = mediaUrl(item.id, "preview");
+      img.src = cached?.kind === "image" ? cached.blobUrl : mediaUrl(item.id, "preview");
       img.alt = item.originalFilename;
       frameEl.appendChild(img);
+      armReadyToPreloadNext(img);
+    } else if (cached?.kind === "video") {
+      // Reuses the same element the preloader already buffered, instead of starting a fresh request.
+      const video = cached.element;
+      video.controls = true;
+      video.currentTime = 0;
+      frameEl.appendChild(video);
+      video.play().catch(() => undefined);
+      armReadyToPreloadNext(video);
     } else {
       const video = document.createElement("video");
       video.src = mediaUrl(item.id, "preview");
@@ -240,12 +305,14 @@ export async function renderSlideshow(
       video.autoplay = true;
       video.muted = true; // browsers block unmuted autoplay; native controls let the viewer unmute
       frameEl.appendChild(video);
+      armReadyToPreloadNext(video);
     }
     counterEl.hidden = !settings.showMediaCounter;
     counterEl.textContent = `${index + 1} / ${items.length}`;
 
     renderControls();
     armCurrentAdvance();
+    trimPreloadWindow();
   }
 
   async function loadItems() {
@@ -286,6 +353,7 @@ export async function renderSlideshow(
   function teardown() {
     teardownCurrentMedia();
     window.removeEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChanged);
+    preloader.evictAll();
   }
 
   function doLogout() {
